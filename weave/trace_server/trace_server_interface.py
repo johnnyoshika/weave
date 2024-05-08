@@ -1,7 +1,10 @@
 import abc
 import datetime
 import typing
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+
+from weave.trace_server.orm import Filter, SortClause
 
 
 class CallSchema(BaseModel):
@@ -287,6 +290,56 @@ class FileContentReadReq(BaseModel):
 
 class FileContentReadRes(BaseModel):
     content: bytes
+
+
+class FeedbackCreateReq(BaseModel):
+    project_id: str = Field(examples=["entity/project"])
+    call_id: str = Field(examples=["275E605D-747C-4F3B-93EC-7FD6A00D0E16"])
+    feedback_type: str = Field(examples=["wandb.thumb.1"])
+    notes: typing.Optional[str] = Field(examples=["I love this"])
+    feedback: typing.Dict[str, typing.Any] = Field(examples=[{
+        "value": "up",
+        "note": "I love this",
+    }])
+
+class FeedbackCreateReqForInsert(FeedbackCreateReq):
+    wb_user_id: str
+
+
+# The response provides the additional fields needed to convert a request
+# into a complete Feedback.
+class FeedbackCreateRes(BaseModel):
+    id: str
+    created_at: datetime.datetime
+    wb_user_id: str
+
+
+class Feedback(FeedbackCreateReqForInsert):
+    id: str
+    created_at: datetime.datetime
+
+
+
+
+class FeedbackQueryReq(BaseModel):
+    project_id: str = Field(examples=["entity/project"])
+    fields: list[str] | None = Field(default=None, examples=[["id", "feedback_type"]])
+    filters: list[Filter] | None = Field(default=None)
+    order_by: list[SortClause] | None = Field(default=None)
+    limit: int | None = Field(default=None, examples=[10])
+    offset: int | None = Field(default=None, examples=[0])
+
+class FeedbackQueryRes(BaseModel):
+    # Note: this is not a list of Feedback because user can request any fields.
+    rows: list[dict[str, typing.Any]]
+
+class FeedbackPurgeReq(BaseModel):
+    # TODO: Allow a list of IDs? Or maybe change this to use filters and limit
+    project_id: str = Field(examples=["entity/project"])
+    id: str = Field(examples=["00000000-0000-0000-0000-000000000000"])
+
+class FeedbackPurgeRes(BaseModel):
+    pass
 
 
 class TraceServerInterface:

@@ -13,9 +13,12 @@ import {useURLSearchParamsDict} from '../util';
 import {useWFHooks} from '../wfReactInterface/context';
 import {CallSchema} from '../wfReactInterface/wfDataModelHooksInterface';
 import {CallDetails} from './CallDetails';
+import {CallFeedback} from './CallFeedback';
 import {CallOverview} from './CallOverview';
 import {CallSummary} from './CallSummary';
 import {CallTraceView, useCallFlattenedTraceTree} from './CallTraceView';
+import {TabUseCall} from '../TabUseCall';
+import {Tailwind} from '../../../../../Tailwind';
 
 export const CallPage: FC<{
   entity: string;
@@ -54,8 +57,20 @@ const useCallTabs = (call: CallSchema) => {
         ]
       : []),
     {
+      label: 'Feedback',
+      content: (
+        <Tailwind>
+          <CallFeedback call={call} />
+        </Tailwind>
+      ),
+    },
+    {
       label: 'Summary',
       content: <CallSummary call={call} />,
+    },
+    {
+      label: 'Use',
+      content: <TabUseCall call={call} />,
     },
   ];
 };

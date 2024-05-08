@@ -7,6 +7,7 @@ import json
 import typing
 import hashlib
 import dataclasses
+import uuid
 
 from clickhouse_connect.driver.client import Client as CHClient
 from clickhouse_connect.driver.query import QueryResult, StreamContext
@@ -18,6 +19,7 @@ from pydantic import BaseModel
 from . import environment as wf_env
 from . import clickhouse_trace_server_migrator as wf_migrator
 from .errors import RequestTooLarge
+from .orm import Table, Column
 
 from .trace_server_interface_util import (
     extract_refs_from_values,
@@ -34,6 +36,18 @@ MAX_FLUSH_COUNT = 10000
 MAX_FLUSH_AGE = 15
 
 FILE_CHUNK_SIZE = 100000
+
+
+TABLE_FEEDBACK = Table('feedback', [
+    Column("id", "string"),
+    Column("project_id", "string"),
+    Column("call_id", "string"),
+    Column("wb_user_id", "string", nullable=True),
+    Column("created_at", "datetime"),
+    Column("feedback_type", "string"),
+    Column("notes", "string"),
+    Column("feedback", "json", nullable=True),
+])
 
 
 class NotFoundError(Exception):
@@ -755,6 +769,67 @@ class ClickHouseTraceServer(tsi.TraceServerInterface):
             raise ValueError("Missing chunks")
         return tsi.FileContentReadRes(content=b"".join(chunks))
 
+    def feedback_create(self, req: tsi.FeedbackCreateReqForInsert) -> tsi.FeedbackCreateRes:
+        feedback_id = generate_id()
+        created_at = datetime.datetime.now(datetime.UTC)
+        column_names = [
+            "id",
+            "call_id",
+            "wb_user_id",
+            "feedback_type",
+            "feedback",
+            "created_at",
+        ]
+        row = [
+            feedback_id,
+            req.call_id,
+            req.wb_user_id,
+            req.feedback_type,
+            _dict_value_to_dump(req.feedback),
+            created_at,
+        ]
+        self._insert("feedback", [row], column_names)
+        return {
+            "id": feedback_id,
+            "created_at": created_at,
+            "wb_user_id": req.wb_user_id,
+        }
+
+    def feedback_query(self, req: tsi.FeedbackQueryReq) -> tsi.FeedbackQueryRes:
+        print('\n' * 10)
+        print('JCR: feedback_query')
+        print(req)
+
+        fieldnames = req.fields or [c.name for c in TABLE_FEEDBACK.cols]
+        query = TABLE_FEEDBACK.select()
+        query = query.fields(fieldnames)
+        query = query.where(req.filters)
+        query = query.order_by(req.order_by)
+        query = query.limit(req.limit).offset(req.offset)
+        sql, parameters = query.prepare()
+        print(sql)
+
+        res = self._query(sql, parameters)
+        col_types = {c.name: c.type for c in TABLE_FEEDBACK.cols}
+        dicts = []
+        for row in res:
+            d = {}
+            for field, value in zip(fieldnames, row):
+                if field in col_types and col_types[field] == 'json':
+                    d[field] = json.loads(value)
+                else:
+                    d[field] = value
+            dicts.append(d)
+        return {
+            "rows": dicts
+        }
+
+    def feedback_purge(self, req: tsi.FeedbackPurgeReq) -> tsi.FeedbackPurgeRes:
+        query = "DELETE FROM feedback WHERE id = {id: String} and project_id = {project_id: String}"
+        parameters = {"id": req.id, "project_id": req.project_id}
+        res = self.ch_client.query(query, parameters=parameters)
+        return {}
+
     # Private Methods
     @property
     def ch_client(self) -> CHClient:
@@ -957,7 +1032,7 @@ class ClickHouseTraceServer(tsi.TraceServerInterface):
             parameters = {}
         query_result = self._query(
             f"""
-            SELECT 
+            SELECT
                 project_id,
                 object_id,
                 created_at,

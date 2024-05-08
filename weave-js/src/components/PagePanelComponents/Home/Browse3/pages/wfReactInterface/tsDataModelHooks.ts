@@ -26,6 +26,7 @@ import {
   CallFilter,
   CallKey,
   CallSchema,
+  FeedbackKey,
   Loadable,
   LoadableWithError,
   ObjectVersionFilter,
@@ -273,6 +274,57 @@ const useCalls = (
       };
     }
   }, [callRes, entity, project, opts?.skip]);
+};
+
+const useCallFeedback = (
+  key: FeedbackKey | null
+): Loadable<traceServerClient.Feedback[] | null> => {
+  const getTsClient = useGetTraceServerClientContext();
+  const loadingRef = useRef(false);
+  const limit = 10;
+  const [feedbackRes, setFeedbackRes] =
+    useState<traceServerClient.TraceFeedbackQueryRes | null>(null);
+  const deepKey = useDeepMemo(key);
+
+  useEffect(() => {
+    if (deepKey) {
+      setFeedbackRes(null);
+      loadingRef.current = true;
+      getTsClient()
+        .feedbackQuery({
+          project_id: projectIdFromParts({
+            entity: deepKey.entity,
+            project: deepKey.project,
+          }),
+          call_id: deepKey.callId,
+        })
+        .then(res => {
+          loadingRef.current = false;
+          setFeedbackRes(res);
+        });
+    }
+  }, [deepKey, getTsClient]);
+
+  return useMemo(() => {
+    if (deepKey == null) {
+      return {
+        loading: false,
+        result: null,
+      };
+    }
+    if (feedbackRes == null || loadingRef.current) {
+      return {
+        loading: true,
+        result: null,
+      };
+    }
+    const result =
+      feedbackRes && 'feedback' in feedbackRes ? feedbackRes.feedback : [];
+    return {
+      loading: false,
+      result,
+    };
+  }, [feedbackRes, deepKey]);
 };
 
 const useOpVersion = (
@@ -1061,6 +1113,7 @@ export const tsWFDataModelHooks: WFDataModelHooksInterface = {
   useRefsData,
   useApplyMutationsToRef,
   useFileContent,
+  useCallFeedback,
   derived: {
     useChildCallsForCompare,
     useGetRefsType,

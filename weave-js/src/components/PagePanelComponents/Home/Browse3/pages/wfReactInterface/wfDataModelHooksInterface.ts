@@ -145,6 +145,12 @@ type AppendRefMutation = {
 
 export type RefMutation = SetRefMutation | AppendRefMutation;
 
+export type FeedbackKey = {
+  entity: string;
+  project: string;
+  callId: string;
+};
+
 export type WFDataModelHooksInterface = {
   useCall: (key: CallKey | null) => Loadable<CallSchema | null>;
   useCalls: (
@@ -188,6 +194,8 @@ export type WFDataModelHooksInterface = {
     digest: string,
     opts?: {skip?: boolean}
   ) => Loadable<string>;
+
+  useCallFeedback: (key: FeedbackKey | null) => Loadable<any[] | null>;
   derived: {
     useChildCallsForCompare: (
       entity: string,

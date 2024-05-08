@@ -55,6 +55,31 @@ export type TraceCallReadError = {
 };
 export type TraceCallReadRes = TraceCallReadSuccess | TraceCallReadError;
 
+export type TraceFeedbackQueryReq = {
+  project_id: string;
+  call_id: string;
+};
+
+export type Feedback = {
+  id: string;
+  call_id: string;
+  wb_user_id: string; // username
+  created_at: string;
+  feedback_type: string;
+  notes: string;
+  feedback: Record<string, any>;
+};
+
+export type TraceFeedbackQuerySuccess = {
+  feedback: Feedback[];
+};
+export type TraceFeedbackQueryError = {
+  detail: string;
+};
+export type TraceFeedbackQueryRes =
+  | TraceFeedbackQuerySuccess
+  | TraceFeedbackQueryError;
+
 interface TraceCallsFilter {
   op_names?: string[];
   input_refs?: string[];
@@ -278,6 +303,15 @@ export class TraceServerClient {
         req
       );
     };
+
+  feedbackQuery: (
+    req: TraceFeedbackQueryReq
+  ) => Promise<TraceFeedbackQueryRes> = req => {
+    return this.makeRequest<TraceFeedbackQueryReq, TraceFeedbackQueryRes>(
+      '/feedback/query',
+      req
+    );
+  };
 
   fileContent: (
     req: TraceFileContentReadReq
